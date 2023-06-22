@@ -80,7 +80,7 @@ class SpeedProgressBar(pg.PlotWidget):
         self.new_ys = self.bargraph.opts['height']
 
     def update_plot(self):
-        """Update bar graph given new Y values"""
+        """Update bar graph given new Y values when called by timer"""
 
         self.bargraph.setOpts(**{'heigth':self.new_ys})
 
@@ -90,7 +90,7 @@ class SpeedProgressBar(pg.PlotWidget):
         Parameters
         ----------
         progress_value : int, float
-
+            progress_value / max_value = percentage
         """
 
         # Create a new bar on graph
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     class MainWindow(QDialog):
         def __init__(self,nb_sections, smooth_wondow, loop_nb):
             super().__init__()
-            self.setWindowTitle("QThread Example")
+            self.setWindowTitle("SpeedProgressBar example")
 
             layout = QVBoxLayout()
             self.bg = SpeedProgressBar(nb_sections=nb_sections, smooth_window=smooth_wondow)
@@ -170,19 +170,16 @@ if __name__ == "__main__":
 
             self.setLayout(layout)
 
-            # set up the worker thread
             WorkerThread.init(loop_nb)
             self.worker_thread = WorkerThread()
             self.worker_thread.progress_updated.connect(self.bg.update_bar)
             self.worker_thread.finished.connect(self.handle_thread_finished)
 
-            # start the worker thread
             self.worker_thread.start()
 
         def handle_thread_finished(self):
-            print("Worker thread finished.")
-            #QApplication.quit()
-
+            self.bg.timer.stop()
+            print("END")
 
     app = QApplication(sys.argv)
     window = MainWindow(*parse_args())
