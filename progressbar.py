@@ -1,4 +1,5 @@
 
+from collections import deque
 import pyqtgraph as pg
 
 class SpeedProgressBar(pg.PlotWidget):
@@ -7,7 +8,7 @@ class SpeedProgressBar(pg.PlotWidget):
         - ordonnate : speed [unit/time]
     """
 
-    def __init__(self, parent=None, nb_sections=500, smooth_window=1):
+    def __init__(self, parent=None, nb_sections=500, smooth_window=4):
         """Initialize the plot : Hide axis, prevent mouse interactions
         initialize values
 
@@ -29,7 +30,7 @@ class SpeedProgressBar(pg.PlotWidget):
         self.plotItem.showGrid(False)
 
         # Store last speed values to smooth_window the graph
-        self.speed = deque([], maxlen=smooth_window)
+        self.speeds = deque([10**-15], maxlen=smooth_window)
 
         # Disable mouse interactions
         self.setMouseEnabled(False)
@@ -54,9 +55,9 @@ class SpeedProgressBar(pg.PlotWidget):
         """
 
         self.nb_sections = int(min(self.nb_sections, max_value)) # max bar number
-        self.bar_width = max_value // self.nb_sections # "width" of bar
+        self.bar_width = max_value / self.nb_sections # "width" of bar
         self.bar_index = 0 # count bar index
-        self.bar_previous_index = 0 # hold previous bar index
+        self._bar_previous_index = 0 # hold previous bar index
 
         # remove last bar and clean plot
         del(self.bargraph)
@@ -97,25 +98,34 @@ class SpeedProgressBar(pg.PlotWidget):
         bar_index = int(progress_value // self.bar_width)
 
         # while bar is not complete skip
-        if bar_index == self.bar_previous_index:
+        if bar_index == self._bar_previous_index:
             return
 
         # get last elapsed time
         toc = time.time() - self.tic if self.tic else 3600 # first time init
         self.tic = time.time()
 
+        # (let's say we loop over 1 Go (max_value) of files, and all are 1Ko
+        # except 1 that is 500Mo (progress_value),
+        # the last will progress of multiples row (nb_bars) in one time)
+        nb_bars = bar_index -self._bar_previous_index
+
         # compute speed
-        self.speed.append((self.bar_width) / toc) # speed of bar
+        new_speed = nb_bars * self.bar_width / toc # speed of bar
 
         # if new progress_value is larger than bar width
-        for index in range(self.bar_previous_index + 1, bar_index + 1):
+        for index in range(self._bar_previous_index + 1, bar_index + 1):
 
-            # Set speed at bar_index
+            self.speeds.append(new_speed)
+
+            # Set mean speed at bar_index
             ys = self.bargraph.opts['height']
-            ys[index] = sum(self.speed) / len(self.speed)
-            self.new_ys = ys
+            ys[index] = sum(self.speeds) / len(self.speeds)
 
-        self.bar_previous_index = bar_index
+        self.new_ys = ys
+
+        self.speeds.append(new_speed)
+        self._bar_previous_index = bar_index
 
 
 #### END #####
@@ -136,7 +146,7 @@ if __name__ == "__main__":
     def parse_args():
         parser = argparse.ArgumentParser(description='ProgressBar example')
         parser.add_argument('-n', '--nb_sections', type=int, help='Number of sections in progress bar', default=500)
-        parser.add_argument('-s', '--smooth_wondow', type=int, help='Window size over bars to smooth speed', default=1)
+        parser.add_argument('-s', '--smooth_wondow', type=int, help='Window size over bars to smooth speed', default=4)
         parser.add_argument('-l', '--loop_nb_elements', type=int, help='Number of elements to simulate', default=1000)
 
         args = parser.parse_args()
@@ -154,8 +164,14 @@ if __name__ == "__main__":
             cls._value = value
 
         def run(self):
-            for i in range(self._value):
-                time.sleep(randint(5,10)/self._value)  # simulate some work
+            i=0
+            while True:
+                j = randint(1,500)
+                print(j)
+                i += j
+                if i > self._value:
+                    break
+                time.sleep(j/1000)
                 self.progress_updated.emit(i)
 
     class MainWindow(QDialog):
